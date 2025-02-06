@@ -9,7 +9,7 @@ from typing import (
 import yaml
 from typing_extensions import Literal
 
-from utils.logger import setup_logger
+from logger import setup_logger
 
 """
 author: Julien Rabault
