@@ -1,4 +1,4 @@
-name: Customizable
+name: customizable
 channels:
   - conda-forge
   - defaults
