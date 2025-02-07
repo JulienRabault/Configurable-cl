@@ -19,7 +19,7 @@ The Configurable Components Library is a modular framework designed to simplify 
 Alternatively, install the package via pip:
 
 ```bash
-pip install configurable
+pip install configurable-cl
 ```
 
 ## Usage
