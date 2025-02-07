@@ -1,4 +1,7 @@
 import inspect
+import logging
+import os
+import sys
 import warnings
 from functools import wraps
 from typing import (
@@ -9,22 +12,20 @@ from typing import (
 import yaml
 from typing_extensions import Literal
 
-from logger import setup_logger
-
 """
 author: Julien Rabault
 Configuration Management Module for AI Applications.
 
 This module provides classes and utilities for managing configurations,
-validating schemas, and creating customizable objects from configuration data.
+validating schemas, and creating Configurable objects from configuration data.
 It is particularly useful for AI applications where configurations can be complex
 and need to be validated at runtime.
 
 Classes:
     - Schema: Defines the schema for configuration attributes.
     - GlobalConfig: Singleton class for global configuration settings.
-    - Customizable: Base class for objects that can be customized via configuration.
-    - TypedCustomizable: Base class for typed customizable objects.
+    - Configurable: Base class for objects that can be customized via configuration.
+    - TypedConfigurable: Base class for typed Configurable objects.
 
 Functions:
     - get_all_subclasses: Recursively retrieves all subclasses of a class.
@@ -32,7 +33,7 @@ Functions:
 
 Example:
     ```python
-    class MyModel(Customizable):
+    class MyModel(Configurable):
         config_schema = {
             'learning_rate': Schema(float, default=0.001),
             'epochs': Schema(int, default=10),
@@ -300,9 +301,9 @@ class GlobalConfig:
         return self.__dict__
 
 
-class Customizable:
+class Configurable:
     """
-    Base class for customizable objects using the `from_config` class method.
+    Base class for Configurable objects using the `from_config` class method.
 
     This class allows objects to be created and configured from a configuration dictionary or file.
 
@@ -312,7 +313,7 @@ class Customizable:
 
     Example:
         ```python
-        class MyAlgorithm(Customizable):
+        class MyAlgorithm(Configurable):
             config_schema = {
                 'learning_rate': Schema(float, optional=True, default=0.01),
                 'batch_size': Schema(int, optional=True, default=32),
@@ -345,7 +346,7 @@ class Customizable:
             **kwargs: Additional keyword arguments.
 
         Returns:
-            Customizable: An instance of the class.
+            Configurable: An instance of the class.
 
         Raises:
             IOError: If there is an error loading the configuration file.
@@ -366,7 +367,7 @@ class Customizable:
             **kwargs: Additional keyword arguments.
 
         Returns:
-            Customizable: An instance of the class.
+            Configurable: An instance of the class.
         """
         config_data = cls._safe_open(config_data)
         config_validate = cls._validate_config(config_data)
@@ -413,7 +414,7 @@ class Customizable:
 
             # Generate the logger name using the class name and optional instance-specific name
             name = self.__class__.__name__ + f"[{self.name}]" if self.name else self.__class__.__name__
-            self.logger = setup_logger(name, config_validate, debug=debug)
+            self.logger = _setup_logger(name, config_validate, debug=debug)
 
             # Retrieve the signature of the original __init__ method
             init_signature = inspect.signature(original_init)
@@ -576,11 +577,11 @@ class Customizable:
             yaml.dump(data, file, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
-class TypedCustomizable(Customizable):
+class TypedConfigurable(Configurable):
     """
-    Base class for typed customizable objects.
+    Base class for typed Configurable objects.
 
-    This class extends `Customizable` to allow for dynamic subclass instantiation
+    This class extends `Configurable` to allow for dynamic subclass instantiation
     based on a 'type' key in the configuration data.
 
     Attributes:
@@ -588,7 +589,7 @@ class TypedCustomizable(Customizable):
 
     Example:
         ```python
-        class BaseModel(TypedCustomizable):
+        class BaseModel(TypedConfigurable):
             aliases = ['base_model']
 
         class CNNModel(BaseModel):
@@ -674,6 +675,55 @@ def load_yaml(yaml_path):
     with open(yaml_path, "r") as yaml_file:
         yaml_data = yaml.safe_load(yaml_file)
     return yaml_data
+
+
+def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False, output_dir=None, run_name=None) -> logging.Logger:
+    """
+    Configure un logger pour un module spécifique avec des handlers pour la console et les fichiers.
+
+    Args:
+        logger_name (str): Nom du logger, souvent basé sur le nom de la classe ou du module.
+        gconfig (dict): Configuration globale contenant 'output_dir' et 'run_name'.
+        log_file (str): Nom du fichier de log.
+        debug (bool): Mode debug activé si True.
+
+    Returns:
+        logging.Logger: L'instance configurée du logger.
+    """
+    logger = logging.getLogger(logger_name)
+
+    config = gconfig
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.propagate = False  # Empêche les logs de remonter à la racine
+
+    # Format pour multi-GPU ou standard
+    console_format = f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+    console_formatter = logging.Formatter(console_format)
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    # File handler
+    try:
+        file_path = os.path.join(config["output_dir"] if not output_dir else output_dir,
+                                 config["run_name"] if not run_name else run_name, log_file)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        file_handler = logging.FileHandler(file_path, mode="w+")
+        file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+        file_formatter = logging.Formatter(console_format)
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        logger.debug("Can't create log file: %s", e)
+        pass
+    try:
+        logging.getLogger("wandb").setLevel(logging.WARNING)
+    except Exception:
+        pass
+    return logger
 
 
 # endregion

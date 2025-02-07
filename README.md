@@ -1,158 +1,143 @@
-# Configurable Components Library
+# Configurable Components Library (CCL)
+
+## Overview
+
+The Configurable Components Library is a modular framework designed to simplify the configuration and management of components—such as models, datasets, optimizers, and metrics—in AI projects. Its support for nested, hierarchical configurations allows you to update settings or extend functionality by defining new subclasses, all while keeping your core code clean and maintainable.
+
+## Key Features
+
+- **Hierarchical Configuration**: Organize your system into multi-level, nested components, making it easier to manage and update complex setups.
+- **Dynamic Instantiation**: Create components from Python dictionaries or YAML files, enabling straightforward swapping of implementations.
+- **Schema-Based Validation**: Automatically enforce type checks, default values, and parameter constraints.
+- **Extendable Architecture**: Add or modify components by creating new subclasses with unique aliases, without altering the main codebase.
+- **Automatic Preconditions**: Validate configurations at instantiation to catch errors early in the development process.
 
 ## Installation
 
-To install this package, you can use **Conda** with the included development tools:
+### Using pip
+
+Alternatively, install the package via pip:
 
 ```bash
-conda env create -f environment.yml
-```
-
-or 
-
-```bash
-pip install customizable
+pip install configurable
 ```
 
 ## Usage
 
-## Key Concepts
+### Core Classes
 
-This package allows adding or modifying any component in a modular way thanks to the architecture based on
-`Customizable` and configuration schemas. All components (models, datasets, optimizers, metrics, etc.) follow this principle.
+The library is centered around two main classes: **`Configurable`** and **`TypedConfigurable`**.
 
----
+#### Configurable
 
-### Modular Architecture with Customizable and TypedCustomizable
+The `Configurable` class provides dynamic component creation using a defined `config_schema`. It handles parameter validation, assigns configuration parameters as instance attributes, and performs precondition checks during instantiation.
 
-This library relies on a modular architecture through the base classes `Customizable` and `TypedCustomizable`. These
-classes provide flexible, extensible, and standardized configuration of components (models, datasets, optimizers, etc.).
-
-#### 1. **Customizable**: Dynamic Component Creation
-
-`Customizable` is a base class that uses schemas (`Schema`) to dynamically validate configurations.
-It enables:
-
-- **Validation**: Each parameter is validated by type and constraint before instantiation using the `Schema` class.
-- **Flexibility**: Loading configurations from Python dictionaries or YAML files. The configurations are dynamic since the parameters depend on the requested object/class type.
-- **Automatic attribute assignment**: Configuration parameters are automatically set as instance attributes, removing the need to manually assign them in the `__init__` method.
-- **Automatic precondition checks**: The `preconditions()` method is automatically called, ensuring validation before instantiation.
-
-**Example**:
+**Example:**
 
 ```python
-from configs.config import Customizable, Schema
+from configs.config import Configurable, Schema
 
-class MyComponent(Customizable):
-  config_schema = {
-    'learning_rate': Schema(float, default=0.01),
-    'batch_size': Schema(int, default=32),
-  }
+class MyComponent(Configurable):
+    config_schema = {
+        'learning_rate': Schema(float, default=0.01),
+        'batch_size': Schema(int, default=32),
+    }
 
-  def preconditions(self):
-      assert self.learning_rate > 0, "Learning rate must be positive"
+    def preconditions(self):
+        assert self.learning_rate > 0, "Learning rate must be positive"
 
-  def __init__(self):
-      pass
+    def __init__(self):
+        # Custom initialization if needed
+        pass
 ```
 
-#### 2. **TypedCustomizable**: Dynamic Subclass Management with Abstraction
+#### TypedConfigurable
 
-`TypedCustomizable` extends `Customizable` by adding the ability to dynamically select a subclass to instantiate based on a `type` parameter.
+`TypedConfigurable` extends `Configurable` to support dynamic subclass selection based on a `type` parameter. This approach allows you to define a hierarchy of component implementations and select the appropriate one at runtime.
 
-To ensure proper implementation, abstract base classes (`ABC`) can be used to enforce method definitions in subclasses.
-
-**Example: Using TypedCustomizable for Automatic Component Selection with Abstract Methods**
+**Example with Abstract Base Classes:**
 
 ```python
-from configs.config import TypedCustomizable, Schema
+from configs.config import TypedConfigurable, Schema
 import abc
 
-class BaseComponent(TypedCustomizable, abc.ABC):
-  aliases = ['base_component']
+class BaseComponent(TypedConfigurable, abc.ABC):
+    aliases = ['base_component']
 
-  @abc.abstractmethod
-  def process(self):
-      """This method must be implemented in subclasses"""
-      pass
+    @abc.abstractmethod
+    def process(self):
+        pass
 
 class SpecificComponentA(BaseComponent):
-  aliases = ['component_a']
-  config_schema = {
-    'param1': Schema(int, default=10),
-  }
+    aliases = ['component_a']
+    config_schema = {
+        'param1': Schema(int, default=10),
+    }
 
-  def process(self):
-      return f"Processing with param1: {self.param1}"
+    def process(self):
+        return f"Processing with param1: {self.param1}"
 
 class SpecificComponentB(BaseComponent):
-  aliases = ['component_b']
-  config_schema = {
-    'param2': Schema(str, default="default_value"),
-  }
+    aliases = ['component_b']
+    config_schema = {
+        'param2': Schema(str, default="default_value"),
+    }
 
-  def process(self):
-      return f"Processing with param2: {self.param2}"
+    def process(self):
+        return f"Processing with param2: {self.param2}"
 
+# Example of dynamic instantiation:
 config_a = {'type': 'component_a', 'param1': 20}
 component_a = BaseComponent.from_config(config_a)
-print(component_a.process())  # Processing with param1: 20
+print(component_a.process())
 
 config_b = {'type': 'component_b', 'param2': "custom_value"}
 component_b = BaseComponent.from_config(config_b)
-print(component_b.process())  # Processing with param2: custom_value
+print(component_b.process())
 ```
 
-### Why Use This Library?
+### Nested & Hierarchical Configuration
 
-By leveraging `Customizable` and `TypedCustomizable`, this library allows:
+One of the library’s key strengths is its support for nested configurations. For example, in an AI pipeline, you might configure a data preprocessor, a model, and an optimizer, each with its own set of parameters:
 
-- **Modular and scalable design**: New components can be added with minimal modifications.
-- **Configuration-driven instantiation**: Easily switch between different implementations using YAML or JSON configurations.
-- **Strong type and schema validation**: Ensures correct parameters and prevents misconfigurations.
-- **Abstract base classes for contract enforcement**: Guarantees that all subclasses implement required methods.
-- **Preconditions to validate component state**: Ensures that instantiated components are correctly configured without requiring manual calls.
+```yaml
+pipeline:
+  data_preprocessor:
+    type: 'preprocessor'
+    params:
+      normalization: true
+      resize: 256
+  model:
+    type: 'advanced_model'
+    params:
+      layers: 50
+      dropout: 0.5
+  optimizer:
+    type: 'adam_optimizer'
+    params:
+      learning_rate: 0.001
+```
 
-### Schema Functionality
+Each block (e.g., `data_preprocessor`, `model`, `optimizer`) can represent a `Configurable` or `TypedConfigurable` component, ensuring a consistent and validated configuration across your system.
 
-#### `Schema` Class Concept
+## Adding and Configuring Components
 
-The `Schema` class defines the expected structure for each configuration parameter. It plays a central role in validation and default value application during object instantiation.
+### Configurable
 
-Main attributes of `Schema`:
-
-- `type`: Specifies the expected type (e.g., int, float, str).
-- `default`: Defines a default value if the parameter is not provided.
-- `optional`: Indicates whether the parameter is optional.
-- `aliases`: Allows using alternative names for the same parameter.
-
-A predefined `Config` type is also provided for flexibility:
+To add a new component, subclass `Configurable` and define your configuration schema along with any necessary preconditions:
 
 ```python
-from typing import Union
-Config = Union[dict, str]
+class NewComponent(Configurable):
+    config_schema = {
+        'param1': Schema(str),
+        'param2': Schema(int, default=10),
+    }
+
+    def preconditions(self):
+        assert self.param2 >= 0, "param2 must be non-negative"
 ```
 
-This allows configuration data to be passed as either a dictionary or a YAML file path.
-
-### Adding a Component in Practice
-
-#### `Customizable`
-
-Define the class: Inherit from the appropriate base class (e.g., `BaseComponent`) or directly from `Customizable` and implement the required logic.
-
-```python
-class NewComponent(Customizable):
-  config_schema = {
-    'param1': Schema(str),
-    'param2': Schema(int, default=10),
-  }
-
-  def preconditions(self):
-      assert self.param2 >= 0, "param2 must be non-negative"
-```
-
-Using configuration-based instantiation:
+You can then provide a configuration via a YAML file or dictionary:
 
 ```yaml
 component:
@@ -165,7 +150,19 @@ import NewComponent
 component = NewComponent.from_config(config['component'])
 ```
 
-With `TypedCustomizable`, dynamically selecting the right implementation is straightforward, making this approach ideal for large-scale, evolving systems.
+### TypedConfigurable
 
+For cases where different implementations (e.g., various models or datasets) are needed, define a base class extending `TypedConfigurable` and create subclasses with unique aliases. This allows you to easily swap implementations by simply updating the configuration.
 
-Contact: julienrabault@icloud.com
+## Why Use This Library?
+
+This library is intended for AI engineers looking for a flexible and maintainable way to manage component configurations. Its modest yet practical design helps you:
+
+- **Separate Configuration from Code**: Update functionality through configuration files or additional subclasses, without modifying core logic.
+- **Facilitate Experimentation**: Easily switch between different implementations for rapid testing and iteration.
+- **Manage Nested Architectures**: Build and validate multi-level configurations that reflect the structure of your system.
+- **Reduce Errors**: Automatic validation and precondition checks help catch issues early in the development process.
+
+## Contact
+
+For further inquiries or contributions, please contact: [julienrabault@icloud.com](mailto:julienrabault@icloud.com)
