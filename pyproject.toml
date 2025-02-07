@@ -1,3 +1,18 @@
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+[project]
+name = "customizable"
+version = "0.1.0"
+description = "This module provides classes and utilities for managing configurations, validating schemas, and creating customizable objects from configuration data. It is particularly useful for AI applications where configurations can be complex and need to be validated at runtime."
+authors = [
+    { name = "Votre Nom", email = "votre.email@example.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]

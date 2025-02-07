@@ -12,7 +12,9 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/JulienRabault/Customizable",
     packages=find_packages(),
+    license="MIT",
     install_requires=[
+        "wheel",
         "PyYAML",
         "pytest",
         "typing-extensions"

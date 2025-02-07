@@ -8,35 +8,10 @@ To install this package, you can use **Conda** with the included development too
 conda env create -f environment.yml
 ```
 
-## Usage
-
-## Key Concepts
-
-This package allows adding or modifying any component in a modular way thanks to the architecture based on
-`Customizable` and configuration schemas. All components (models, datasets, optimizers, metrics, etc.) follow this principle.
-
----
-
-### Modular Architecture with Customizable and TypedCustomizable
-
-This library relies on a modular architecture through the base classes `Customizable` and `TypedCustomizable`. These
-classes provide flexible, extensible, and standardized configuration of components (models, datasets, optimizers, etc.).
-
-#### 1. **Customizable**: Dynamic Component Creation
-
-`Customizable` is a base class that uses schemas (`Schema`) to dynamically validate configurations.
-It enables:
-
-- **Validation**: Each parameter is validated by type and constraint before instantiation using the `Schema` class.
-- **Flexibility**: Loading configurations from Python dictionaries or YAML files. The configurations are dynamic since the parameters depend on the requested object/class type.
-# Configurable Components Library
-
-## Installation
-
-To install this package, you can use **Conda** with the included development tools:
+or 
 
 ```bash
-conda env create -f environment.yml
+pip install customizable
 ```
 
 ## Usage
