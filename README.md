@@ -16,10 +16,10 @@ The Configurable Components Library is a modular framework designed to simplify 
 
 ### Using pip
 
-Alternatively, install the package via pip:
+Install the package via pip:
 
 ```bash
-pip install configurable
+pip install configurable-cl
 ```
 
 ## Usage
@@ -31,11 +31,12 @@ The library is centered around two main classes: **`Configurable`** and **`Typed
 #### Configurable
 
 The `Configurable` class provides dynamic component creation using a defined `config_schema`. It handles parameter validation, assigns configuration parameters as instance attributes, and performs precondition checks during instantiation.
+If you use `Configurable`, **you must use** `from_config(...)` to instantiate. You can use `__init__` for custom initialization but you lose the automatic validation, automatic adding attributes and preconditionning.
 
 **Example:**
 
 ```python
-from configs.config import Configurable, Schema
+from configurable import Configurable, Schema
 
 class MyComponent(Configurable):
     config_schema = {
@@ -58,7 +59,7 @@ class MyComponent(Configurable):
 **Example with Abstract Base Classes:**
 
 ```python
-from configs.config import TypedConfigurable, Schema
+from configurable import TypedConfigurable, Schema
 import abc
 
 class BaseComponent(TypedConfigurable, abc.ABC):
@@ -127,6 +128,8 @@ Each block (e.g., `data_preprocessor`, `model`, `optimizer`) can represent a `Co
 To add a new component, subclass `Configurable` and define your configuration schema along with any necessary preconditions:
 
 ```python
+from configurable import Configurable, Schema
+
 class NewComponent(Configurable):
     config_schema = {
         'param1': Schema(str),

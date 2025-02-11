@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="configurable-cl",
-    version="0.1.3",
+    version="0.1.4",
     author="Julien Rabault",
     author_email="julienrabault@icloud.com",
     description="This module provides classes and utilities for managing configurations, validating schemas, "

@@ -1,3 +1,4 @@
+import importlib
 import inspect
 import logging
 import os
@@ -30,18 +31,24 @@ Classes:
 Functions:
     - get_all_subclasses: Recursively retrieves all subclasses of a class.
     - load_yaml: Loads YAML configuration files.
+    - _setup_logger: Configures a logger for a specific module with console and file handlers.
 
 Example:
     ```python
     class MyModel(Configurable):
+    
+        aliase = ['my_model']
+    
         config_schema = {
             'learning_rate': Schema(float, default=0.001),
             'epochs': Schema(int, default=10),
         }
 
-        def __init__(self, learning_rate, epochs):
-            self.learning_rate = learning_rate
-            self.epochs = epochs
+        def __init__(self):
+            pass
+        
+        def preconditions(self):
+            assert self.batch_size > 0, "Batch size must be greater than 0."
 
     config = {
         'learning_rate': 0.01,
@@ -314,14 +321,19 @@ class Configurable:
     Example:
         ```python
         class MyAlgorithm(Configurable):
+
+            aliases = ['my_algorithm']
+
             config_schema = {
                 'learning_rate': Schema(float, optional=True, default=0.01),
                 'batch_size': Schema(int, optional=True, default=32),
             }
 
-            def __init__(self, learning_rate, batch_size):
-                self.learning_rate = learning_rate
-                self.batch_size = batch_size
+            def __init__(self):
+                pass
+
+            def preconditions(self):
+                assert self.batch_size > 0, "Batch size must be greater than 0."
 
         config = {
             'learning_rate': 0.001,
@@ -334,6 +346,22 @@ class Configurable:
 
     config_schema = {"name": Schema(Union[str, None], optional=True, default=None)}
     aliases = []
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Creates an instance. If instantiated directly via __init__ instead of `from_config`, a warning is issued.
+        """
+        frame = inspect.currentframe()
+        outer_frames = inspect.getouterframes(frame, 3)
+
+        if not any(frame.function in ("from_config", "_from_config") for frame in outer_frames):
+            warnings.warn(
+                f"Direct instantiation of a {cls.__name__} object. It is recommended to use 'from_config' instead.",
+                UserWarning,
+                stacklevel=2
+            )
+
+        return super().__new__(cls)
 
     @classmethod
     def from_config(cls, config_data, *args, debug=False, **kwargs):
@@ -600,9 +628,8 @@ class TypedConfigurable(Configurable):
                 'kernel_size': Schema(int, default=3),
             }
 
-            def __init__(self, filters, kernel_size):
-                self.filters = filters
-                self.kernel_size = kernel_size
+            def __init__(self:
+                pass
 
         config = {
             'type': 'cnn',
@@ -676,19 +703,48 @@ def load_yaml(yaml_path):
         yaml_data = yaml.safe_load(yaml_file)
     return yaml_data
 
+def get_console_format(logger_name):
+    """
+    Generate the logging format string based on the number of available GPUs.
+
+    Args:
+        logger_name (str): Name of the logger.
+
+    Returns:
+        str: Logging format string.
+    """
+    # Vérifier si torch est installé
+    torch_installed = importlib.util.find_spec("torch") is not None
+
+    if not torch_installed:
+        return f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
+
+    import torch
+    import torch.distributed as dist
+
+    # Déterminer le nombre de GPU et le rang
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    rank = dist.get_rank() if num_gpus > 1 else 0
+
+    return (
+        f"[{logger_name} - GPU {rank}] %(asctime)s - %(levelname)s - %(message)s"
+        if num_gpus > 1
+        else f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
+    )
+
 
 def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False, output_dir=None, run_name=None) -> logging.Logger:
     """
-    Configure un logger pour un module spécifique avec des handlers pour la console et les fichiers.
+    Configure a logger for a specific module with handlers for both console and file output.
 
     Args:
-        logger_name (str): Nom du logger, souvent basé sur le nom de la classe ou du module.
-        gconfig (dict): Configuration globale contenant 'output_dir' et 'run_name'.
-        log_file (str): Nom du fichier de log.
-        debug (bool): Mode debug activé si True.
+        logger_name (str): Name of the logger, often based on the class or module name.
+        gconfig (dict): Global configuration containing 'output_dir' and 'run_name'.
+        log_file (str): Name of the log file.
+        debug (bool): Debug mode enabled if True.
 
     Returns:
-        logging.Logger: L'instance configurée du logger.
+        logging.Logger: The configured logger instance.
     """
     logger = logging.getLogger(logger_name)
 
@@ -697,7 +753,7 @@ def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False,
     logger.propagate = False  # Empêche les logs de remonter à la racine
 
     # Format pour multi-GPU ou standard
-    console_format = f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
+    console_format = get_console_format(logger_name)
 
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -724,6 +780,7 @@ def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False,
     except Exception:
         pass
     return logger
+
 
 
 # endregion
