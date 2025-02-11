@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "configurable-cl"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
     { name = "Julien Rabault", email = "julienrabault@icloud.com" }
 ]
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/JulienRabault/Configurable"
+Homepage = "https://github.com/JulienRabault/Configurable-cl"
 
 [tool.setuptools]
 packages = ["configurable"]

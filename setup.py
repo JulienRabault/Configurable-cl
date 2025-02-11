@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="configurable-cl",
-    version="0.1.4",
+    version="0.1.5",
     author="Julien Rabault",
     author_email="julienrabault@icloud.com",
     description="This module provides classes and utilities for managing configurations, validating schemas, "
@@ -10,7 +10,7 @@ setup(
                 "applications where configurations can be complex and need to be validated at runtime.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/JulienRabault/Configurable",
+    url="https://github.com/JulienRabault/Configurable-cl",
     packages=find_packages(),
     license="MIT",
     install_requires=[
