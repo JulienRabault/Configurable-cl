@@ -155,6 +155,7 @@ class Schema:
             Any: The validated value.
 
         """
+        # expected_type = _get_typing_attr(expected_type)
         origin = get_origin(expected_type)
         args = get_args(expected_type)
         if origin is Union:
@@ -201,8 +202,11 @@ class Schema:
             return type(value)(
                 self._validate_type(item, element_type) for item in value
             )
-        elif isinstance(expected_type, type):
-            if isinstance(value, expected_type):
+        # need `or expected_type is Any` because sinstance(expected_type, type) is False for Any
+        elif isinstance(expected_type, type) or expected_type is Any:
+            if expected_type is Any or expected_type is typing_extensions.Any:
+                return value
+            elif isinstance(value, expected_type):
                 return value
             else:
                 raise TypeError(
@@ -344,7 +348,7 @@ class Configurable:
         ```
     """
 
-    config_schema = {"name": Schema(Union[str, None], optional=True, default=None)}
+    config_schema: Dict = {"name": Schema(Union[str, None], optional=True, default=None)}
     aliases = []
 
     def __new__(cls, *args, **kwargs):
@@ -507,7 +511,12 @@ class Configurable:
         # Collect config_schema from all bases
         for base in reversed(cls.__mro__):
             if hasattr(base, "config_schema"):
-                config_schema.update(base.config_schema)
+                if isinstance(base.config_schema, dict):
+                    config_schema.update(base.config_schema)
+                else:
+                    raise TypeError(
+                        f"config_schema must be a dictionary, got {type(base.config_schema).__name__}"
+                    )
         config_schema.update(dynamic_schema)
 
         validated_config = {}
@@ -781,6 +790,12 @@ def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False,
         pass
     return logger
 
+import typing_extensions
 
+def _get_typing_attr(obj):
+    name = getattr(obj, "_name", None)
+    if name and hasattr(typing_extensions, name):
+        return getattr(typing_extensions, name)
+    return obj
 
 # endregion

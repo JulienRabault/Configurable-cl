@@ -1,4 +1,7 @@
+from typing import Any, Iterable, Union, List
+
 import pytest
+from typing_extensions import Any, Iterable, Union
 
 from configurable.config import Schema, GlobalConfig, Configurable, TypedConfigurable, ValidationError
 
@@ -9,6 +12,61 @@ def test_schema_validation_required_field():
     config_data = {'key': 5}
     assert schema.validate(config_data, 'key') == 5
 
+def test_schema_validation_any_type():
+    schema = Schema(Any)
+    config_data = {'key': 5}
+    assert schema.validate(config_data, 'key') == 5
+
+def test_schema_validation_list():
+    schema = Schema(List[int])  # Liste d'entiers
+    config_data = {'key': [1, 2, 3]}
+    assert schema.validate(config_data, 'key') == [1, 2, 3]
+
+def test_schema_validation_list_failure():
+    schema = Schema(List[int])  # Liste d'entiers
+    config_data = {'key': [1, '2', 3]}
+    try:
+        schema.validate(config_data, 'key')
+        assert False, "Expected a validation error for invalid list element type."
+    except TypeError:
+        pass
+
+def test_schema_validation_iterable():
+    schema = Schema(Iterable)
+    config_data = {'key': [1, 2, 3]}
+    assert schema.validate(config_data, 'key') == [1, 2, 3]
+
+    config_data = {'key': (1, 2, 3)}
+    assert schema.validate(config_data, 'key') == (1, 2, 3)
+
+    config_data = {'key': {1, 2, 3}}
+    assert schema.validate(config_data, 'key') == {1, 2, 3}
+
+def test_schema_validation_iterable_failure():
+    schema = Schema(Iterable)
+    config_data = {'key': 42}
+    try:
+        schema.validate(config_data, 'key')
+        assert False, "Expected a validation error for non-iterable value."
+    except ValidationError:
+        pass
+
+def test_schema_validation_union_type():
+    schema = Schema(Union[int, str])
+    config_data = {'key': 5}
+    assert schema.validate(config_data, 'key') == 5
+
+    config_data = {'key': 'hello'}
+    assert schema.validate(config_data, 'key') == 'hello'
+
+def test_schema_validation_union_type_failure():
+    schema = Schema(Union[int, str])
+    config_data = {'key': 5.5}
+    try:
+        schema.validate(config_data, 'key')
+        assert False, "Expected a validation error for invalid union type."
+    except TypeError:
+        pass
 
 def test_schema_validation_missing_required_field():
     schema = Schema(int)
@@ -129,8 +187,26 @@ class AlgorithmB(BaseAlgorithm):
         'param_b': Schema(str),
     }
 
-    def __init__(self, param_b):
-        self.param_b = param_b
+    def __init__(self, ):
+        pass
+
+def test_typed_Configurable_from_config_algorithm_c():
+    class AlgorithmC(Configurable):
+        aliases = ['algorithm_c']
+        config_schema = 1  # Incorrect type, should be a dict of Schema objects
+
+        def __init__(self):
+            pass
+
+    # Configuration data for testing
+    config_data = {
+        'param_b': 42
+    }
+
+    with pytest.raises(TypeError) as exc_info:
+        AlgorithmC.from_config(config_data)
+
+    assert str(exc_info.value) in "config_schema must be a dictionary, got int"
 
 
 def test_typed_Configurable_from_config_algorithm_a():
