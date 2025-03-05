@@ -26,7 +26,17 @@ pip install configurable-cl
 
 ### Core Classes
 
-The library is centered around two main classes: **`Configurable`** and **`TypedConfigurable`**.
+The library is centered around tree main classes: **`Schema`**, **`Configurable`** and **`TypedConfigurable`**.
+
+#### The Schema Class
+
+The Schema class plays a crucial role in validating configurations. It allows you to define the expected type for each configuration parameter and enforce constraints such as:
+
+- **Type Checking and Conversion:** Validate simple types (e.g., int, float, str) as well as complex types using type hints (e.g., Union, Literal, List, Dict, etc.).
+- **Default Values and Optional Parameters:** Specify a default value and mark parameters as optional.
+- **Aliases:** Support alternative keys for configuration parameters.
+- **Recursive Validation:** Validate nested structures to ensure overall configuration consistency.
+- **Path Type Conversion:** When a parameter is expected to be a Path, the schema automatically converts the given string into a pathlib.Path object, ensuring that path-related configurations are handled appropriately.
 
 #### Configurable
 

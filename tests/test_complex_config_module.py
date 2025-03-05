@@ -2,7 +2,7 @@ from typing import List, Literal
 
 import pytest
 
-from configurable.config import Schema, Configurable, TypedConfigurable, ValidationError
+from configurable.configurable import Schema, Configurable, TypedConfigurable, ValidationError
 
 
 # Test cases for the Configurable class with complex subclassing

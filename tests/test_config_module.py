@@ -3,7 +3,7 @@ from typing import Any, Iterable, Union, List
 import pytest
 from typing_extensions import Any, Iterable, Union
 
-from configurable.config import Schema, GlobalConfig, Configurable, TypedConfigurable, ValidationError
+from configurable.configurable import Schema, GlobalConfig, Configurable, TypedConfigurable, ValidationError
 
 
 # Test cases for the Schema class
