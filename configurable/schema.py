@@ -1,3 +1,4 @@
+import typing
 from pathlib import Path
 from typing import (
     Union,
@@ -153,6 +154,13 @@ class Schema:
             return type(value)(
                 self._validate_type(item, element_type) for item in value
             )
+        elif origin is typing.Sequence or origin is collections.abc.Sequence:
+            if not isinstance(value, collections.abc.Sequence):
+                raise TypeError(f"Expected Sequence but got {type(value).__name__}")
+            if not args:
+                return value  # No type specified for sequence elements
+            element_type = args[0]
+            return [self._validate_type(item, element_type) for item in value]
         elif expected_type is Path:
             try:
                 return Path(value)
