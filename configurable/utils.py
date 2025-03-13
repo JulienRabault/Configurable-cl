@@ -23,7 +23,8 @@ def load_yaml(yaml_path):
 
 def get_console_format(logger_name):
     """
-    Generate the logging format string based on the number of available GPUs.
+    Generates the logging format string based on the number of available GPUs 
+    and the initialization state of torch.distributed.
 
     Args:
         logger_name (str): Name of the logger.
@@ -33,21 +34,20 @@ def get_console_format(logger_name):
     """
     torch_installed = importlib.util.find_spec("torch") is not None
 
-    if not torch_installed:
+    if not torch_installed or not dist.is_initialized():
         return f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
 
     import torch
     import torch.distributed as dist
 
     num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-    rank = dist.get_rank() if num_gpus > 1 else 0
+    rank = 0
 
-    return (
-        f"[{logger_name} - GPU {rank}] %(asctime)s - %(levelname)s - %(message)s"
-        if num_gpus > 1
-        else f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
-    )
+    # Ensures torch.distributed is available AND initialized before calling get_rank()
+    if num_gpus > 1 and dist.is_available() and dist.is_initialized():
+        rank = dist.get_rank()
 
+    return f"[{logger_name} - GPU {rank}] %(asctime)s - %(levelname)s - %(message)s"
 
 def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False, output_dir=None, run_name=None) -> logging.Logger:
     """
@@ -68,7 +68,6 @@ def _setup_logger(logger_name: str, gconfig, log_file="logger.log", debug=False,
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     logger.propagate = False  # Empêche les logs de remonter à la racine
 
-    # Format pour multi-GPU ou standard
     console_format = get_console_format(logger_name)
 
     # Console handler
