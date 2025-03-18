@@ -273,8 +273,6 @@ class Configurable:
                     )
 
             self.preconditions()
-            print(f"init_args: {init_args}")
-            print(f"args: {args}")
             original_init(self, *args, **init_args)
 
         cls.__module__ = cls.__module__
