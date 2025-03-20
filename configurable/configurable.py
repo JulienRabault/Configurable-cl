@@ -33,9 +33,9 @@ Functions:
 Example:
     ```python
     class MyModel(Configurable):
-    
+
         aliase = ['my_model']
-    
+
         config_schema = {
             'learning_rate': Schema(float, default=0.001),
             'epochs': Schema(int, default=10),
@@ -43,7 +43,7 @@ Example:
 
         def __init__(self):
             pass
-        
+
         def preconditions(self):
             assert self.batch_size > 0, "Batch size must be greater than 0."
 
@@ -56,6 +56,7 @@ Example:
     ```
 """
 
+_init_patched_classes = set()
 
 class GlobalConfig:
     """
@@ -155,6 +156,7 @@ class Configurable:
 
     config_schema: Dict = {"name": Schema(Union[str, None], optional=True, default=None)}
     aliases = []
+    _init_patched = False
 
     def __new__(cls, *args, **kwargs):
         """
@@ -197,102 +199,68 @@ class Configurable:
     def _from_config(cls, config_data, *args, debug=False, **kwargs):
         """
         Core logic for creating an instance from configuration data.
-
-        Args:
-            config_data (dict or str): Configuration data as a dictionary or a path to a YAML file.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            Configurable: An instance of the class.
         """
         config_data = cls._safe_open(config_data)
         config_validate = cls._validate_config(config_data)
-
-        # Create a new subclass with a wrapped __init__
-        WrappedClass = cls._create_wrapped_class(config_validate, debug=debug)
-
-        # Instantiate the wrapped class
-        instance = WrappedClass(*args, **kwargs)
+        original_init = cls.__init__
+        cls._patch_init(debug=debug)
+        try:
+            instance = cls(*args, config_validate=config_validate, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while instantiating {cls.__name__} with config: {config_validate}") from e
+        finally:
+            cls.__init__ = original_init
         return instance
 
     @classmethod
-    def _create_wrapped_class(cls, config_validate, debug=False):
+    def _patch_init(cls, debug=False):
         """
-        Creates a new subclass with a wrapped __init__ method that sets configuration attributes.
+        Temporarily patches the `__init__` method to inject validated configuration parameters.
+
+        This method overrides the class constructor to ensure that validated configuration parameters
+        are set before the original initialization is executed. It also sets up logging and global
+        configurations. After instance creation, the original `__init__` method is restored.
 
         Args:
-            config_validate (dict): The validated configuration data. This dictionary contains
-                                    configuration key-value pairs to be set as attributes on the class instance.
-            debug (bool): If True, enables debugging mode for the logger. Defaults to False.
-
-        Returns:
-            type: A new dynamically created class that inherits from the current class (cls).
+            debug (bool, optional): Enables debugging mode for logging. Defaults to False.
         """
-        # Save the original __init__ method of the class to be wrapped later
         original_init = cls.__init__
 
-        @wraps(original_init)  # Preserve metadata of the original __init__ method
-        def wrapped_init(self, *args, **kwargs):
-            """
-            A replacement for the __init__ method of the class. This method:
-            - Sets configuration attributes.
-            - Initializes a logger.
-            - Ensures required arguments for the original __init__ method are set.
-            """
+        @wraps(original_init)
+        def wrapped_init(self, *args, config_validate=None, **kwargs):
+            if config_validate is None:
+                raise ValueError(f"Missing 'config_validate' in {cls.__name__} initialization.")
 
-            # Set attributes from the validated configuration
+            # Apply validated config to instance
             for key, value in config_validate.items():
                 setattr(self, key, value)
 
-            # Initialize global and configuration-specific settings
             self.global_config = GlobalConfig()
             self.config = config_validate
 
-            # Generate the logger name using the class name and optional instance-specific name
-            name = self.__class__.__name__ + f"[{self.name}]" if self.name else self.__class__.__name__
+            name = f"{self.__class__.__name__}[{self.name}]" if getattr(self, "name", None) else self.__class__.__name__
             self.logger = _setup_logger(name, config_validate, debug=debug)
 
-            # Retrieve the signature of the original __init__ method
+            # Extract required init parameters
             init_signature = inspect.signature(original_init)
-            init_params = init_signature.parameters
-
-            # Filter parameters to exclude 'self', '*args', and '**kwargs'
-            init_params = {
-                k: v
-                for k, v in init_params.items()
-                if k != "self" and k != "args" and k != "kwargs"
-            }
-
-            # Collect arguments for the original __init__ method
             init_args = {}
-            for name, param in init_params.items():
-                if name in kwargs:
-                    # Use the value from kwargs if provided
-                    init_args[name] = kwargs.pop(name)
-                elif name in config_validate:
-                    # Use the value from the validated configuration
-                    init_args[name] = config_validate[name]
-                elif param.default != inspect.Parameter.empty:
-                    # Use the default value from the original __init__ signature if available
-                    pass
-                else:
-                    # Raise an error if a required argument is missing
-                    raise TypeError(
-                        f"Missing required argument '{name}' for {cls.__name__}.__init__"
-                    )
 
-            # Perform any required checks or operations before initialization
+            for param_name, param in init_signature.parameters.items():
+                if param_name in {"self", "args", "kwargs", "config_validate"}:
+                    continue
+                if param_name in kwargs:
+                    init_args[param_name] = kwargs.pop(param_name)
+                elif param_name in config_validate:
+                    init_args[param_name] = config_validate[param_name]
+                elif param.default == inspect.Parameter.empty:
+                    raise TypeError(f"Missing required argument '{param_name}' for {cls.__name__}.__init__")
+
+            # Ensure preconditions before calling __init__
             self.preconditions()
-
-            # Call the original __init__ method with the prepared arguments
             original_init(self, *args, **init_args)
 
-        # Dynamically create a new class inheriting from the original class (cls)
-        WrappedClass = type(cls.__name__, (cls,), {"__init__": wrapped_init})
-
-        # Return the new wrapped class
-        return WrappedClass
+        cls.__init__ = wrapped_init
+        _init_patched_classes.add(cls)
 
     @classmethod
     def _safe_open(cls, config_data):
@@ -313,7 +281,6 @@ class Configurable:
         if dynamic_schema is None:
             dynamic_schema = {}
         config_schema = {}
-        # Collect config_schema from all bases
         for base in reversed(cls.__mro__):
             if hasattr(base, "config_schema"):
                 if isinstance(base.config_schema, dict):
@@ -379,7 +346,6 @@ class Configurable:
 
         return validated_config
 
-
     def preconditions(self):
         """
         Check if all preconditions are met before running the algorithm.
@@ -397,6 +363,32 @@ class Configurable:
     def get_config_schema(self):
         return self.config_schema
 
+    def save_dict_to_yaml(self, data: dict, file_path: str):
+        with open(file_path, "w", encoding="utf-8") as file:
+            yaml.dump(data, file, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    def __reduce__(self):
+        """
+        __reduce__ method for pickle serialization.
+        It ensures the correct class is used during unpickling.
+        """
+        return (rebuild_configurable, (self.__class__, self.config, self.__getstate__()))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("logger", None)
+        state.pop("global_config", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if not hasattr(self, "global_config"):
+            self.global_config = GlobalConfig()
+        if not hasattr(self, "logger"):
+            name = self.__class__.__name__ + (
+                f"[{self.name}]" if getattr(self, "name", None) else self.__class__.__name__)
+            self.logger = _setup_logger(name, self.config, debug=False)
+
     def __str__(self):
         def recursive_str(d, indent=0):
             string = ""
@@ -413,10 +405,6 @@ class Configurable:
         config_string = ""
         config_string += recursive_str(self.__dict__)
         return config_string
-
-    def save_dict_to_yaml(self, data: dict, file_path: str):
-        with open(file_path, "w", encoding="utf-8") as file:
-            yaml.dump(data, file, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 class TypedConfigurable(Configurable):
@@ -483,7 +471,7 @@ class TypedConfigurable(Configurable):
     @classmethod
     def find_subclass_by_type_name(cls, type_name: str):
         assert (
-            type(type_name) == str
+                type(type_name) == str
         ), f"type_name must be a string, got {type(type_name)}"
         for subclass in cls.__subclasses__():
             if type_name.lower() in [alias.lower() for alias in subclass.aliases] + [
@@ -499,4 +487,21 @@ class TypedConfigurable(Configurable):
     @classmethod
     def get_all_name(cls):
         return f"{cls.__name__} ({', '.join(cls.aliases)})"
+
+
+def rebuild_configurable(cls, config, state):
+    """
+    Reconstruction function for pickle.
+
+    Args:
+        cls (type): The original class of the instance.
+        config (dict): The validated configuration of the instance.
+        state (dict): The state extracted from the instance via __getstate__.
+
+    Returns:
+        An instance of `cls`, reconstructed with the correct configuration.
+    """
+    instance = cls._from_config(config)
+    instance.__setstate__(state)
+    return instance
 

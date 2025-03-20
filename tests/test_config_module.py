@@ -1,3 +1,4 @@
+import pickle
 from typing import Any, Iterable, Union, List
 
 import pytest
@@ -239,3 +240,44 @@ def test_typed_Configurable_missing_required_param():
     config = {'type': 'algorithm_b'}
     with pytest.raises(ValidationError):
         BaseAlgorithm.from_config(config)
+
+
+def test_AlgorithmA_pickle_serializable():
+    """
+    Test that an instance of AlgorithmA can be pickled and unpickled.
+    """
+    config = {'type': 'algorithm_a', 'param_a': 10}
+    instance = BaseAlgorithm.from_config(config)
+    pickled_instance = pickle.dumps(instance)
+
+    loaded_instance = pickle.loads(pickled_instance)
+
+    assert isinstance(loaded_instance, AlgorithmA)
+    assert loaded_instance.param_a == instance.param_a
+
+def test_AlgorithmB_pickle_serializable():
+    config = {'type': 'algorithm_b', 'param_b': 'test_value'}
+    instance = BaseAlgorithm.from_config(config)
+
+    pickled_instance = pickle.dumps(instance)
+
+    loaded_instance = pickle.loads(pickled_instance)
+    assert isinstance(loaded_instance, AlgorithmB)
+    assert hasattr(loaded_instance, 'param_b')
+
+def test_AlgorithmA_pickle_unserializable():
+    class Unserializable:
+        """ Dummy class that is not serializable with pickle. """
+        def __reduce__(self):
+            raise TypeError("Not serializable")
+
+    class AlgorithmWithUnserializable(AlgorithmA):
+        def __init__(self, param_a):
+            super().__init__(param_a)
+            self.bad_param = Unserializable()
+
+    config = {'type': 'AlgorithmWithUnserializable'}
+    instance = BaseAlgorithm.from_config(config)
+
+    with pytest.raises(AttributeError, match="Can't pickle"):
+        pickle.dumps(instance)

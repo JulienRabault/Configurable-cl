@@ -22,9 +22,7 @@ def load_yaml(yaml_path):
     return yaml_data
 
 def get_console_format(logger_name):
-    if importlib.util.find_spec("torch") is None:
-        return f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
-    if importlib.util.find_spec("torch.distributed") is None:
+    if importlib.util.find_spec("torch") is None or importlib.util.find_spec("torch.distributed") is None:
         return f"[{logger_name}] %(asctime)s - %(levelname)s - %(message)s"
     rank_info = ""
     try:

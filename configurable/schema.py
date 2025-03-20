@@ -81,7 +81,8 @@ class Schema:
             Any: The validated and possibly converted value of the configuration attribute.
 
         Raises:
-            ValueError: If the value is missing (and not optional), or if the value cannot be converted to expected type.
+            ValueError: If the value is found but cannot be converted to the expected type.
+            KeyError: If the value is missing and not optional.
         """
         keys_to_check = [key] + self.aliases
         for k in keys_to_check:
@@ -90,10 +91,7 @@ class Schema:
                 return self._validate_type(value, self.expected_type)
         if self.optional:
             return self.default
-        else:
-            raise KeyError(
-                f"Required configuration key(s) {keys_to_check} not found in config."
-            )
+        raise KeyError(f"Required configuration key(s) {keys_to_check} not found in config.")
 
     def _validate_type(self, value: Any, expected_type: Type) -> Any:
         """
@@ -107,10 +105,11 @@ class Schema:
             Any: The validated value.
 
         """
-        # expected_type = _get_typing_attr(expected_type)
         origin = get_origin(expected_type)
         args = get_args(expected_type)
-        if origin is Union:
+        if value is None and self.optional:
+            return None
+        elif origin is Union:
             # Try each type in the Union
             for typ in args:
                 try:
