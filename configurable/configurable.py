@@ -202,80 +202,67 @@ class Configurable:
         """
         config_data = cls._safe_open(config_data)
         config_validate = cls._validate_config(config_data)
-
         original_init = cls.__init__
-
-        # Application du patch temporaire
-        cls._patch_init()
-
+        cls._patch_init(debug=debug)
         try:
-            # Création de l'instance avec le `wrapped_init`
             instance = cls(*args, config_validate=config_validate, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while instantiating {cls.__name__} with config: {config_validate}") from e
         finally:
-            # Restauration de l'__init__ original
             cls.__init__ = original_init
-
         return instance
 
     @classmethod
     def _patch_init(cls, debug=False):
         """
-        Crée une sous-classe dynamique encapsulant un __init__ modifié sans modifier la classe de base.
-        Cela évite l'addition des wrappers lors d'appels multiples.
-        """
+        Temporarily patches the `__init__` method to inject validated configuration parameters.
 
-        original_init = cls.__init__
+        This method overrides the class constructor to ensure that validated configuration parameters
+        are set before the original initialization is executed. It also sets up logging and global
+        configurations. After instance creation, the original `__init__` method is restored.
+
+        Args:
+            debug (bool, optional): Enables debugging mode for logging. Defaults to False.
+        """
+        original_init = getattr(cls, "__init__", None)
+
+        if not original_init or original_init is object.__init__:
+            raise TypeError(f"{cls.__name__} does not have a custom __init__ method.")
 
         @wraps(original_init)
         def wrapped_init(self, *args, config_validate=None, **kwargs):
-            """
-            __init__ modifié pour injecter la configuration validée.
-            """
-            # Applique les valeurs de config_validate aux attributs de l'instance
+            if config_validate is None:
+                raise ValueError(f"Missing 'config_validate' in {cls.__name__} initialization.")
+
+            # Apply validated config to instance
             for key, value in config_validate.items():
                 setattr(self, key, value)
 
-            # Initialize global and configuration-specific settings
             self.global_config = GlobalConfig()
             self.config = config_validate
 
-            # Generate the logger name using the class name and optional instance-specific name
-            name = self.__class__.__name__ + f"[{self.name}]" if self.name else self.__class__.__name__
+            # Setup logger
+            name = f"{self.__class__.__name__}[{self.name}]" if getattr(self, "name", None) else self.__class__.__name__
             self.logger = _setup_logger(name, config_validate, debug=debug)
 
-            # Retrieve the signature of the original __init__ method
+            # Extract required init parameters
             init_signature = inspect.signature(original_init)
-            init_params = init_signature.parameters
-
-            # Filter parameters to exclude 'self', '*args', and '**kwargs'
-            init_params = {
-                k: v
-                for k, v in init_params.items()
-                if k != "self" and k != "args" and k != "kwargs" and k != "config_validate"
-            }
-
-            # Collect arguments for the original __init__ method
             init_args = {}
-            for name, param in init_params.items():
-                if name in kwargs:
-                    # Use the value from kwargs if provided
-                    init_args[name] = kwargs.pop(name)
-                elif name in config_validate:
-                    # Use the value from the validated configuration
-                    init_args[name] = config_validate[name]
-                elif param.default != inspect.Parameter.empty:
-                    # Use the default value from the original __init__ signature if available
-                    pass
-                else:
-                    # Raise an error if a required argument is missing
-                    raise TypeError(
-                        f"Missing required argument '{name}' for {cls.__name__}.__init__"
-                    )
 
+            for param_name, param in init_signature.parameters.items():
+                if param_name in {"self", "args", "kwargs", "config_validate"}:
+                    continue
+                if param_name in kwargs:
+                    init_args[param_name] = kwargs.pop(param_name)
+                elif param_name in config_validate:
+                    init_args[param_name] = config_validate[param_name]
+                elif param.default == inspect.Parameter.empty:
+                    raise TypeError(f"Missing required argument '{param_name}' for {cls.__name__}.__init__")
+
+            # Ensure preconditions before calling __init__
             self.preconditions()
             original_init(self, *args, **init_args)
 
-        cls.__module__ = cls.__module__
         cls.__init__ = wrapped_init
         _init_patched_classes.add(cls)
 
@@ -298,7 +285,6 @@ class Configurable:
         if dynamic_schema is None:
             dynamic_schema = {}
         config_schema = {}
-        # Collect config_schema from all bases
         for base in reversed(cls.__mro__):
             if hasattr(base, "config_schema"):
                 if isinstance(base.config_schema, dict):

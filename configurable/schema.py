@@ -105,7 +105,6 @@ class Schema:
             Any: The validated value.
 
         """
-        # expected_type = _get_typing_attr(expected_type)
         origin = get_origin(expected_type)
         args = get_args(expected_type)
         if value is None and self.optional:
