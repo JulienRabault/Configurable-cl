@@ -224,10 +224,7 @@ class Configurable:
         Args:
             debug (bool, optional): Enables debugging mode for logging. Defaults to False.
         """
-        original_init = getattr(cls, "__init__", None)
-
-        if not original_init or original_init is object.__init__:
-            raise TypeError(f"{cls.__name__} does not have a custom __init__ method.")
+        original_init = cls.__init__
 
         @wraps(original_init)
         def wrapped_init(self, *args, config_validate=None, **kwargs):
@@ -241,7 +238,6 @@ class Configurable:
             self.global_config = GlobalConfig()
             self.config = config_validate
 
-            # Setup logger
             name = f"{self.__class__.__name__}[{self.name}]" if getattr(self, "name", None) else self.__class__.__name__
             self.logger = _setup_logger(name, config_validate, debug=debug)
 
